@@ -1,8 +1,8 @@
-# Brand_Forge-AI (OriginMint AI)
+# Brand_Forge-AI ( )
 
 **Transform Your Startup Idea Into A Complete Brand Identity** using AI-powered multi-agent collaboration.
 
-OriginMint AI is an intelligent branding platform that uses a sequential workflow of specialized AI agents to gather insights about your startup and generate a comprehensive brand identity including name, mission, voice, visual design, colors, typography, and logo prompts.
+ BrandForge AI is an intelligent branding platform that uses a sequential workflow of specialized AI agents to gather insights about your startup and generate a comprehensive brand identity including name, mission, voice, visual design, colors, typography, and logo prompts.
 
 
 ## Table of Contents
@@ -263,7 +263,7 @@ Navigation, branding, and controls.
 Landing section with agent showcase.
 
 **Displays:**
-- Main headline: "OriginMint AI"
+- Main headline: " BrandForge AI"
 - Subheadline: "Turn Your Startup Idea Into A Complete Brand Identity"
 - 4 Agent cards with icons and descriptions
 - Animated gradient backgrounds
@@ -673,7 +673,7 @@ Messages are logged in `agentHistory` array:
 Brands are saved to localStorage:
 
 ```javascript
-// Stored key: "originMint_brands"
+// Stored key: "BrandForge_brands"
 // Format: Array of brand objects
 [
   {
@@ -866,4 +866,4 @@ For issues, questions, or feature requests, please open an issue in the reposito
 
 Built with  using React, Vite, TailwindCSS, and AI-powered workflows.
 
-**OriginMint AI** - *Turn Your Startup Idea Into A Complete Brand Identity*
+**** - *Turn Your Startup Idea Into A Complete Brand Identity*
