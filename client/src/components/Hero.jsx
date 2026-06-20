@@ -21,7 +21,7 @@ export default function Hero() {
       </div>
 
       <h2 className="mx-auto max-w-4xl text-4xl font-jakarta font-extrabold tracking-tight sm:text-6xl text-brand-text-main">
-        OriginMint <span className="hero-gradient-text">AI</span>
+        BrandForge <span className="hero-gradient-text">AI</span>
       </h2>
       <p className="mx-auto mt-4 max-w-2xl text-xl sm:text-2xl font-jakarta font-bold tracking-tight text-brand-secondary/90">
         Turn Your Startup Idea Into A Complete Brand Identity

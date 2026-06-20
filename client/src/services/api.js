@@ -93,7 +93,7 @@ const needsInput = (currentAgent, question) => ({
   agent: {
     id: currentAgent.toLowerCase(),
     name: `${currentAgent} Agent`,
-    role: "OriginMint AI workflow agent",
+    role: "BrandForge AI workflow agent",
   },
 });
 

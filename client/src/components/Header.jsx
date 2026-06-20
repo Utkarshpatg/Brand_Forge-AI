@@ -15,12 +15,9 @@ export default function Header({
     <header className="sticky top-3 mx-auto max-w-7xl w-[calc(100%-24px)] z-40 navbar-glass">
       <div className="mx-auto flex max-w-7xl h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex items-center space-x-3 cursor-pointer" onClick={() => window.location.reload()}>
-          <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-primary to-brand-secondary shadow-md shadow-brand-primary/20">
-            <Cpu className="h-5 w-5 text-white animate-pulse" />
-          </div>
           <div>
             <h1 className="text-xl font-jakarta font-extrabold tracking-tight bg-gradient-to-r from-brand-primary via-amber-500 to-brand-secondary bg-clip-text text-transparent">
-              OriginMint AI
+              BrandForge AI
             </h1>
             <p className="text-[10px] text-brand-text-muted tracking-wider font-semibold uppercase">Multi-Agent Brand Engine</p>
           </div>
