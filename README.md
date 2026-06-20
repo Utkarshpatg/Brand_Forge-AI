@@ -531,6 +531,51 @@ VITE_API_URL=http://localhost:5000/api/generate-brand
 
 ---
 
+##  Backend Installation & API Keys
+
+The backend is built with FastAPI and LangChain. It handles sequential multi-agent execution and integrates with **Groq** and **Gemini** APIs for live AI generation.
+
+### **Step-by-Step Backend Setup**
+
+```bash
+# 1. Navigate to the server folder
+cd server
+
+# 2. Create a virtual environment
+python3 -m venv .venv
+
+# 3. Activate the virtual environment
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# 4. Install dependencies
+pip install -r requirements.txt
+
+# 5. Create a .env file from the example
+cp .env.example .env  # Or copy manually
+
+# 6. Run the FastAPI development server
+uvicorn main:app --host 127.0.0.1 --port 5000 --reload
+```
+
+### **Backend Environment Variables**
+
+Create a `.env` file in the `server/` directory (or copy from [.env.example](file:///Users/vatsalagarwal/Projects/Brand_Forge-AI/.env.example)):
+
+```bash
+# 1. Groq API Key (Recommended for fast inference)
+GROQ_API_KEY=your_groq_api_key_here
+
+# 2. Google Gemini API Key (Alternative)
+GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+### **Multi-Agent Execution Pipeline**
+The backend detects the keys dynamically at run-time:
+*   **Live LLM Engine**: If a valid API key is present in `.env`, the server uses `models.py` to route inputs through our sequential LangChain prompts (Discovery $\rightarrow$ Strategy $\rightarrow$ Visual $\rightarrow$ Validator) using structured outputs.
+*   **Heuristic Fallback**: If no key is set or if the external API call fails, the server uses a rule-based mock engine to instantly return realistic brand configurations, ensuring the demo never crashes.
+
+---
+
 ##  Running the Project
 
 ### **Development Mode**
