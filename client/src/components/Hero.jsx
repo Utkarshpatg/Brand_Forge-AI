@@ -15,11 +15,6 @@ export default function Hero() {
       <div className="absolute top-0 left-1/2 -z-10 h-72 w-72 -translate-x-1/2 rounded-full bg-brand-primary/5 blur-[80px]" />
       <div className="absolute top-10 left-1/3 -z-10 h-48 w-48 rounded-full bg-brand-secondary/4 blur-[60px]" />
 
-      <div className="inline-flex items-center space-x-2 rounded-full border border-brand-primary/20 bg-brand-primary/5 px-3 py-1 text-xs text-brand-secondary backdrop-blur-sm transition-all hover:bg-brand-primary/10 cursor-default mb-6">
-        <span className="flex h-2 w-2 rounded-full bg-brand-secondary animate-ping" />
-        <span className="font-semibold tracking-wide uppercase">Buildathon Edition v2.0</span>
-      </div>
-
       <h2 className="mx-auto max-w-4xl text-4xl font-jakarta font-extrabold tracking-tight sm:text-6xl text-brand-text-main">
         BrandForge <span className="hero-gradient-text">AI</span>
       </h2>
