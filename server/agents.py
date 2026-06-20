@@ -47,5 +47,20 @@ agents = {
             "logoConcept": "string",
             "logoPrompt": "string"
         }
+    },
+    "validator": {
+        "id": "validator",
+        "name": "Consistency Validator Agent",
+        "role": "Consistency & Alignment Check",
+        "objective": "Audit all brand elements (audience, voice, colors, typography, USP) to ensure cross-brand coherence and output an alignment score.",
+        "input": "Discovery outputs, strategy outputs, and visual identity outputs.",
+        "outputSchema": {
+            "coherenceScore": "integer",
+            "status": "string",
+            "passedChecks": "array of strings",
+            "failedChecks": "array of strings",
+            "improvementSuggestions": "array of strings",
+            "finalSummary": "string"
+        }
     }
 }

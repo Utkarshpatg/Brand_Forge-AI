@@ -154,8 +154,9 @@ def run_agent_pipeline_llm(idea: str, answers: Dict[str, str]) -> Dict[str, Any]
         ("system", (
             "You are the BrandForge Consistency Validator Agent. Your role is Brand Coherence Audit.\n"
             "Evaluate alignment between the Discovery data, Strategy data, and Visual Identity details.\n"
+            "Verify that the brand has a clear Unique Selling Point (USP) — what sets it apart from competitors — and check that this USP is logically reflected in the value proposition and key differentiators.\n"
             "Calculate a coherence score (0-100) based on how well the colors, typography, brand name, "
-            "and tagline fit the target audience, mission, and voice.\n"
+            "tagline, and USP fit the target audience, mission, and voice.\n"
             "Respond ONLY as a structured JSON object matching the requested schema."
         )),
         ("user", (

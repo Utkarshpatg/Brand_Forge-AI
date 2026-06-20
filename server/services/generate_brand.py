@@ -238,6 +238,10 @@ def run_validator_agent(
             "label": "Tagline aligns with mission",
             "passed": len(strategy["tagline"]) > 0 and len(discovery["mission"]) > 0,
         },
+        {
+            "label": "Unique Selling Point clearly defined",
+            "passed": len(strategy["keyDifferentiators"]) >= 3 and len(strategy["valueProposition"]) > 20,
+        },
     ]
 
     passed_checks = [check["label"] for check in checks if check["passed"]]
