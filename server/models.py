@@ -1,7 +1,6 @@
 import os
 from typing import Any, Dict, List
 from pydantic import BaseModel, Field
-from langchain_core.prompts import ChatPromptTemplate
 
 # =====================================================================
 # 1. Pydantic Structured Output Schemas
@@ -60,31 +59,67 @@ class ValidatorOutput(BaseModel):
 # =====================================================================
 
 def get_llm() -> Any:
-    # Read keys (making sure empty placeholders are ignored)
+    model_status = get_model_status()
+
+    if model_status["provider"] == "groq":
+        print("[BrandForge AI] Using Groq API for multi-agent generation.")
+        from langchain_groq import ChatGroq
+        return ChatGroq(
+            model_name=model_status["model"],
+            groq_api_key=os.getenv("GROQ_API_KEY", "").strip(),
+            temperature=0.7,
+        )
+
+    if model_status["provider"] == "gemini":
+        print("[BrandForge AI] Using Google Gemini API for multi-agent generation.")
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        return ChatGoogleGenerativeAI(
+            model=model_status["model"],
+            google_api_key=os.getenv("GEMINI_API_KEY", "").strip(),
+            temperature=0.7,
+        )
+
+    raise ValueError(
+        "No valid API keys configured in .env. "
+        "Please provide a valid GROQ_API_KEY or GEMINI_API_KEY."
+    )
+
+
+def get_model_status() -> Dict[str, Any]:
     groq_key = os.getenv("GROQ_API_KEY", "").strip()
     gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
+    has_groq = bool(groq_key and "YOUR" not in groq_key.upper())
+    has_gemini = bool(gemini_key and "YOUR" not in gemini_key.upper())
 
-    if groq_key and "YOUR" not in groq_key:
-        print("⚡ [BrandForge AI] Using Groq API for multi-agent generation.")
-        from langchain_groq import ChatGroq
-        return ChatGroq(model_name="llama3-70b-8192", groq_api_key=groq_key, temperature=0.7)
-    
-    elif gemini_key and "YOUR" not in gemini_key:
-        print("⚡ [BrandForge AI] Using Google Gemini API for multi-agent generation.")
-        from langchain_google_genai import ChatGoogleGenerativeAI
-        return ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=gemini_key, temperature=0.7)
-    
-    else:
-        raise ValueError(
-            "No valid API keys configured in .env. "
-            "Please provide a valid GROQ_API_KEY or GEMINI_API_KEY."
-        )
+    if has_groq:
+        return {
+            "provider": "groq",
+            "model": "llama3-70b-8192",
+            "mode": "llm",
+            "configured": True,
+        }
+
+    if has_gemini:
+        return {
+            "provider": "gemini",
+            "model": "gemini-1.5-flash",
+            "mode": "llm",
+            "configured": True,
+        }
+
+    return {
+        "provider": "rule-based",
+        "model": "local fallback",
+        "mode": "fallback",
+        "configured": False,
+    }
 
 # =====================================================================
 # 3. Sequential Multi-Agent Workflow Implementation
 # =====================================================================
 
 def run_agent_pipeline_llm(idea: str, answers: Dict[str, str]) -> Dict[str, Any]:
+    from langchain_core.prompts import ChatPromptTemplate
     llm = get_llm()
 
     # --- Step 1: Discovery Agent ---

@@ -1,4 +1,4 @@
-﻿import os
+import os
 from typing import Any
 
 from dotenv import load_dotenv
@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from models import get_model_status
 from services.generate_brand import generate_brand_workflow, get_agent_registry
 
 
@@ -40,6 +41,8 @@ def root() -> dict[str, Any]:
         "endpoints": {
             "health": "GET /api/health",
             "agents": "GET /api/agents",
+            "models": "GET /api/models",
+            "system": "GET /api/system",
             "brand": "POST /api/generate-brand",
         },
     }
@@ -52,6 +55,7 @@ def health() -> dict[str, Any]:
         "service": "brand-engine",
         "port": PORT,
         "agents": len(get_agent_registry()),
+        "model": get_model_status(),
     }
 
 
@@ -60,6 +64,24 @@ def list_agents() -> dict[str, Any]:
     return {
         "ok": True,
         "agents": get_agent_registry(),
+    }
+
+
+@app.get("/api/models")
+def model_status() -> dict[str, Any]:
+    return {
+        "ok": True,
+        "model": get_model_status(),
+    }
+
+
+@app.get("/api/system")
+def system_status() -> dict[str, Any]:
+    return {
+        "ok": True,
+        "agents": get_agent_registry(),
+        "model": get_model_status(),
+        "workflow": ["Discovery", "Strategy", "Visual", "Validator"],
     }
 
 

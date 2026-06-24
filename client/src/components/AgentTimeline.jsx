@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, Cpu, Compass, Award, Eye, Settings } from "lucide-react";
+import { Check,  Compass, Award, Eye, Settings } from "lucide-react";
 
 export default function AgentTimeline({ currentAgent, answers }) {
   const steps = [
@@ -73,7 +73,6 @@ export default function AgentTimeline({ currentAgent, answers }) {
     <div className="card-premium rounded-2xl p-6 flex flex-col h-full">
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-sm font-bold text-brand-text-main uppercase tracking-wider flex items-center space-x-2">
-          <Cpu className="text-brand-primary animate-spin" style={{ animationDuration: '6s' }} />
           <span>Agent Timeline</span>
         </h3>
         <span className="text-xs font-mono font-bold bg-brand-primary/20 text-brand-primary border border-brand-primary/30 px-2 py-0.5 rounded-full">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { generateBrand } from "../services/api";
+import { generateBrand, getSystemStatus } from "../services/api";
 import Hero from "../components/Hero";
 import IdeaInput from "../components/IdeaInput";
 import BrandOverviewCard from "../components/BrandOverviewCard";
@@ -31,6 +31,31 @@ export default function Home() {
   const [darkMode, setDarkMode] = useState(true);
   const [recentSearches, setRecentSearches] = useState([]);
   const [showShareToast, setShowShareToast] = useState(false);
+  const [systemStatus, setSystemStatus] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getSystemStatus()
+      .then((status) => {
+        if (!cancelled) setSystemStatus(status);
+      })
+      .catch((err) => {
+        console.warn("Backend system status unavailable:", err.message);
+        if (!cancelled) {
+          setSystemStatus({
+            ok: false,
+            agents: [],
+            model: { provider: "offline", model: "client simulation", mode: "demo", configured: false },
+            workflow: ["Discovery", "Strategy", "Visual", "Validator"],
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Load recent searches from localStorage
   useEffect(() => {

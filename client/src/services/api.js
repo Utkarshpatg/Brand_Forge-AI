@@ -18,6 +18,12 @@ export const getAgents = async () => {
   return response.data;
 };
 
+export const getSystemStatus = async () => {
+  const response = await axios.get(`${API_BASE_URL.replace(/\/$/, "")}/api/system`, {
+    timeout: 4000,
+  });
+  return response.data;
+};
 /**
  * Sends startup idea and accumulated agent answers to the backend API.
  * Demo mode intentionally uses the local browser simulation.

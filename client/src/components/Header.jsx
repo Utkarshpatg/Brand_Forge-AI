@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Cpu, History, Moon, Sun } from "lucide-react";
+import { History, Moon, Sun, Wifi, WifiOff } from "lucide-react";
 
 export default function Header({ 
   recentSearches = [], 
@@ -7,9 +7,13 @@ export default function Header({
   demoMode, 
   setDemoMode,
   darkMode,
-  setDarkMode
+  setDarkMode,
+  systemStatus
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const model = systemStatus?.model;
+  const backendOnline = systemStatus?.ok !== false && Boolean(systemStatus);
+  const modelLabel = model ? `${model.provider}: ${model.model}` : "checking backend";
 
   return (
     <header className="sticky top-3 mx-auto max-w-7xl w-[calc(100%-24px)] z-40 navbar-glass">
@@ -25,6 +29,21 @@ export default function Header({
 
         <div className="flex items-center space-x-3">
          
+          {/* <div
+            className={`hidden lg:flex items-center space-x-2 px-3 py-2 rounded-lg border text-xs font-semibold ${
+              backendOnline
+                ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-300"
+                : "bg-amber-500/10 border-amber-500/25 text-amber-300"
+            }`}
+            title={`Backend, agents, and model status: ${modelLabel}`}
+          >
+            {backendOnline ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
+            <span>{modelLabel}</span>
+            {systemStatus?.agents?.length ? (
+              <span className="text-brand-text-muted">/ {systemStatus.agents.length} agents</span>
+            ) : null}
+          </div> */}
+
           <div className="hidden md:flex items-center space-x-2 bg-brand-surface border border-brand-border rounded-lg p-1">
             <button
               onClick={() => setDemoMode(false)}

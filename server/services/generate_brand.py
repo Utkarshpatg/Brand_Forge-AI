@@ -1,4 +1,3 @@
-import os
 from typing import Any
 
 from agents import agents
@@ -41,24 +40,14 @@ def generate_brand_workflow(
         return needs_input("Visual")
 
     if current_agent == "Visual" and normalized_answers.get("Visual"):
-        # Check if a valid API key is present in environment
-        groq_key = os.getenv("GROQ_API_KEY", "").strip()
-        gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
-        has_groq = groq_key and "YOUR" not in groq_key
-        has_gemini = gemini_key and "YOUR" not in gemini_key
+        from models import get_model_status
 
-        if has_groq or has_gemini:
+        if get_model_status()["configured"]:
             try:
-                # Add current directory to path if needed and import
-                import sys
-                current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                if current_dir not in sys.path:
-                    sys.path.append(current_dir)
-                
                 from models import run_agent_pipeline_llm
                 agent_outputs = run_agent_pipeline_llm(normalized_idea, normalized_answers)
             except Exception as e:
-                print(f"⚠️ LLM pipeline failed, falling back to rule-based generation: {e}")
+                print(f"LLM pipeline failed, falling back to rule-based generation: {e}")
                 agent_outputs = run_agent_pipeline(normalized_idea, normalized_answers)
         else:
             agent_outputs = run_agent_pipeline(normalized_idea, normalized_answers)

@@ -3,3 +3,5 @@ node_modules
 server/agents
 .venv
 __pycache__
+__pycache__/
+*.pyc
