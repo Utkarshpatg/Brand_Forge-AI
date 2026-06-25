@@ -7,7 +7,7 @@ class GenerateBrandRequest(BaseModel):
     idea: str = Field(default="", description="Startup idea to brand.")
     answers: dict[str, Any] = Field(
         default_factory=dict,
-        description="Answers keyed by workflow agent: Discovery, Strategy, Visual.",
+        description="Answers keyed by agent ID or public workflow label.",
     )
     currentAgent: str = Field(
         default="",
@@ -57,3 +57,4 @@ class SystemStatusResponse(BaseModel):
     agents: list[dict[str, Any]]
     model: dict[str, Any]
     workflow: list[str]
+

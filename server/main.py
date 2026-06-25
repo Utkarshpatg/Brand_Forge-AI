@@ -15,6 +15,7 @@ from dtos import (
     SystemStatusResponse,
 )
 from models import get_model_status
+from agents import get_workflow_public_ids
 from services.generate_brand import generate_brand_workflow, get_agent_registry
 
 load_dotenv()
@@ -96,7 +97,7 @@ def system_status() -> dict[str, Any]:
         "ok": True,
         "agents": get_agent_registry(),
         "model": get_model_status(),
-        "workflow": ["Discovery", "Strategy", "Visual", "Validator"],
+        "workflow": get_workflow_public_ids(),
     }
 
 
@@ -130,3 +131,5 @@ def handle_generate_brand(payload: GenerateBrandRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=result.get("error", "Invalid request."))
 
     return result
+
+

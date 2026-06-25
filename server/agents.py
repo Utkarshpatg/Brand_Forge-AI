@@ -1,6 +1,9 @@
 import logging
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
+from pydantic import BaseModel
 
 from models import (
     DiscoveryOutput,
@@ -13,169 +16,297 @@ from models import (
 
 logger = logging.getLogger(__name__)
 
-AGENTS = {
-    "discovery": {
-        "id": "discovery",
-        "name": "Discovery Agent",
-        "role": "Target Audience & Market Research",
-        "objective": "Identify the target audience, customer pain points, mission, and market position.",
-        "input": "Startup idea and user response regarding target audience.",
-        "outputSchema": {
-            "industry": "string",
-            "targetAudience": {"primary": "string", "secondary": "string"},
-            "customerPainPoints": "array of strings",
-            "mission": "string",
-            "coreValues": "array of strings",
-            "emotionalDrivers": "array of strings",
-            "businessGoals": "array of strings",
-            "marketPosition": "string",
-        },
-    },
-    "strategy": {
-        "id": "strategy",
-        "name": "Strategy Agent",
-        "role": "Brand Voice & Positioning",
-        "objective": "Define personality, voice, archetype, positioning, value proposition, and tagline.",
-        "input": "Discovery output and user response regarding brand personality.",
-        "outputSchema": {
-            "brandPersonality": "array of strings",
-            "brandArchetype": "string",
-            "brandVoice": "array of strings",
-            "brandTone": "array of strings",
-            "positioningStatement": "string",
-            "valueProposition": "string",
-            "keyDifferentiators": "array of strings",
-            "tagline": "string",
-        },
-    },
-    "visualIdentity": {
-        "id": "visualIdentity",
-        "name": "Visual Identity Agent",
-        "role": "Design Direction & Aesthetics",
-        "objective": "Generate brand name, visual direction, color palette, typography, and logo prompt.",
-        "input": "Startup idea, discovery output, strategy output, and user design style preference.",
-        "outputSchema": {
-            "brandName": "string",
-            "designStyle": "string",
-            "colorPalette": "array of objects containing hex and meaning",
-            "typography": "object containing headingFont and bodyFont",
-            "logoConcept": "string",
-            "logoPrompt": "string",
-        },
-    },
-    "validator": {
-        "id": "validator",
-        "name": "Consistency Validator Agent",
-        "role": "Consistency & Alignment Check",
-        "objective": "Audit audience, strategy, visuals, and USP for cross-brand coherence.",
-        "input": "Discovery, strategy, and visual identity outputs.",
-        "outputSchema": {
-            "coherenceScore": "integer",
-            "status": "string",
-            "passedChecks": "array of strings",
-            "failedChecks": "array of strings",
-            "improvementSuggestions": "array of strings",
-            "finalSummary": "string",
-        },
-    },
-}
 
-agents = AGENTS
+@dataclass(frozen=True)
+class AgentContext:
+    idea: str
+    answers: dict[str, str]
+    outputs: dict[str, dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class BrandAgent:
+    id: str
+    public_id: str
+    name: str
+    role: str
+    objective: str
+    question_builder: Callable[[AgentContext, "BrandAgent"], str]
+    expected_input: str
+    output_schema: dict[str, Any]
+    llm_schema: type[BaseModel]
+    llm_system_prompt: str
+    llm_user_template: str
+    llm_input_builder: Callable[[AgentContext], dict[str, Any]]
+    fallback_runner: Callable[[AgentContext], dict[str, Any]]
+    requires_user_input: bool = True
+
+    def registry_entry(self) -> dict[str, Any]:
+        return {
+            "key": self.id,
+            "id": self.id,
+            "publicId": self.public_id,
+            "name": self.name,
+            "role": self.role,
+            "objective": self.objective,
+            "input": self.expected_input,
+            "outputSchema": self.output_schema,
+        }
+
+    def prompt_summary(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "role": self.role,
+            "objective": self.objective,
+        }
+
+
+WORKFLOW_ORDER = ["discovery", "strategy", "visualIdentity"]
+VALIDATION_AGENT_ID = "validator"
+
+
+def get_agent(agent_id_or_public_id: str) -> BrandAgent | None:
+    normalized = normalize_agent_key(agent_id_or_public_id)
+    return AGENT_DEFINITIONS.get(normalized)
+
+
+def get_agent_registry() -> list[dict[str, Any]]:
+    return [agent.registry_entry() for agent in AGENT_DEFINITIONS.values()]
+
+
+def get_workflow_agent_ids() -> list[str]:
+    return list(WORKFLOW_ORDER)
+
+
+def get_executable_agent_ids() -> list[str]:
+    return [*WORKFLOW_ORDER, VALIDATION_AGENT_ID]
+
+
+def get_workflow_public_ids(include_validation: bool = True) -> list[str]:
+    agent_ids = get_executable_agent_ids() if include_validation else get_workflow_agent_ids()
+    return [AGENT_DEFINITIONS[agent_id].public_id for agent_id in agent_ids]
+
+
+def normalize_agent_key(agent_id_or_public_id: str) -> str:
+    value = normalize_text(agent_id_or_public_id)
+    if not value:
+        return ""
+
+    if value in AGENT_DEFINITIONS:
+        return value
+
+    lowered = value.lower()
+    for agent_id, agent in AGENT_DEFINITIONS.items():
+        aliases = {
+            agent_id.lower(),
+            agent.public_id.lower(),
+            agent.name.lower(),
+            agent.name.lower().replace(" agent", ""),
+        }
+        if lowered in aliases:
+            return agent_id
+
+    return value
+
+
+def normalize_answer_map(answers: dict[str, Any] | None) -> dict[str, str]:
+    if not isinstance(answers, dict):
+        return {}
+
+    normalized: dict[str, str] = {}
+    for key, value in answers.items():
+        agent_id = normalize_agent_key(str(key))
+        if agent_id in AGENT_DEFINITIONS:
+            normalized[agent_id] = normalize_text(value)
+
+    return normalized
+
+
+def generate_agent_question(
+    agent_id: str,
+    idea: str,
+    answers: dict[str, Any] | None = None,
+    outputs: dict[str, dict[str, Any]] | None = None,
+) -> str:
+    agent = get_agent(agent_id)
+    if agent is None:
+        raise ValueError(f"Unknown workflow agent: {agent_id}")
+
+    context = AgentContext(
+        idea=normalize_text(idea),
+        answers=normalize_answer_map(answers),
+        outputs=outputs or {},
+    )
+
+    if get_model_status()["configured"]:
+        try:
+            question = generate_llm_question(agent, context)
+            if question:
+                return question
+        except Exception:
+            logger.exception("LLM question generation failed for agent '%s'.", agent.id)
+
+    return agent.question_builder(context, agent)
+
+
+def generate_llm_question(agent: BrandAgent, context: AgentContext) -> str:
+    llm = get_llm()
+    prompt = (
+        "Generate exactly one short, conversational user question for the active branding agent.\n"
+        "The question must be specific to the startup and help the agent accomplish its objective.\n"
+        "Do not explain. Do not add numbering. Return only the question.\n\n"
+        f"Agent: {agent.name}\n"
+        f"Role: {agent.role}\n"
+        f"Objective: {agent.objective}\n"
+        f"Startup idea: {context.idea}\n"
+        f"Previous answers: {context.answers}\n"
+        f"Previous agent outputs: {context.outputs}"
+    )
+    response = llm.invoke(prompt)
+    raw_question = getattr(response, "content", response)
+    return normalize_question(str(raw_question))
 
 
 def run_brand_pipeline(idea: str, answers: dict[str, str]) -> dict[str, Any]:
+    canonical_answers = normalize_answer_map(answers)
+
     if get_model_status()["configured"]:
         try:
             logger.info("Running LLM-backed brand agent pipeline.")
-            return run_llm_agent_pipeline(idea, answers)
+            return run_llm_agent_pipeline(idea, canonical_answers)
         except Exception:
             logger.exception("LLM agent pipeline failed; using rule-based fallback.")
 
     logger.info("Running rule-based brand agent pipeline.")
-    return run_rule_based_agent_pipeline(idea, answers)
+    return run_rule_based_agent_pipeline(idea, canonical_answers)
 
 
 def run_llm_agent_pipeline(idea: str, answers: dict[str, str]) -> dict[str, Any]:
+    from langchain_core.prompts import ChatPromptTemplate
+
     llm = get_llm()
+    outputs: dict[str, dict[str, Any]] = {}
 
-    discovery_prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are the BrandForge Discovery Agent. Respond only as structured JSON matching the schema."),
-        ("user", "Startup Idea: {idea}\nTarget Audience Choice: {audience_choice}"),
-    ])
-    discovery_chain = discovery_prompt | llm.with_structured_output(DiscoveryOutput)
-    discovery = discovery_chain.invoke({
-        "idea": idea,
-        "audience_choice": answers.get("Discovery") or "Early adopters and growth-focused customers",
-    }).model_dump()
+    for agent_id in get_executable_agent_ids():
+        agent = AGENT_DEFINITIONS[agent_id]
+        context = AgentContext(idea=idea, answers=answers, outputs=outputs)
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", agent.llm_system_prompt),
+            ("user", agent.llm_user_template),
+        ])
+        chain = prompt | llm.with_structured_output(agent.llm_schema)
+        outputs[agent_id] = chain.invoke(agent.llm_input_builder(context)).model_dump()
 
-    strategy_prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are the BrandForge Strategy Agent. Respond only as structured JSON matching the schema."),
-        ("user", "Discovery Data: {discovery_data}\nPersonality Choice: {personality_choice}"),
-    ])
-    strategy_chain = strategy_prompt | llm.with_structured_output(StrategyOutput)
-    strategy = strategy_chain.invoke({
-        "discovery_data": str(discovery),
-        "personality_choice": answers.get("Strategy") or "Modern",
-    }).model_dump()
-
-    visual_prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are the BrandForge Visual Identity Agent. Respond only as structured JSON matching the schema."),
-        (
-            "user",
-            "Startup Idea: {idea}\nDiscovery Data: {discovery_data}\nStrategy Data: {strategy_data}\nDesign Style: {design_style_choice}",
-        ),
-    ])
-    visual_chain = visual_prompt | llm.with_structured_output(VisualOutput)
-    visual = visual_chain.invoke({
-        "idea": idea,
-        "discovery_data": str(discovery),
-        "strategy_data": str(strategy),
-        "design_style_choice": answers.get("Visual") or "Modern",
-    }).model_dump()
-
-    validator_prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are the BrandForge Consistency Validator Agent. Respond only as structured JSON matching the schema."),
-        ("user", "Discovery Data: {discovery_data}\nStrategy Data: {strategy_data}\nVisual Data: {visual_data}"),
-    ])
-    validator_chain = validator_prompt | llm.with_structured_output(ValidatorOutput)
-    validator = validator_chain.invoke({
-        "discovery_data": str(discovery),
-        "strategy_data": str(strategy),
-        "visual_data": str(visual),
-    }).model_dump()
-
-    final = run_orchestrator_agent(discovery, strategy, visual, validator)
-    return build_agent_outputs(discovery, strategy, visual, validator, final)
+    return build_agent_outputs(outputs)
 
 
 def run_rule_based_agent_pipeline(idea: str, answers: dict[str, str]) -> dict[str, Any]:
-    discovery = run_discovery_agent(idea, answers)
-    strategy = run_strategy_agent(discovery, answers)
-    visual = run_visual_identity_agent(idea, discovery, strategy, answers)
-    validator = run_validator_agent(discovery, strategy, visual)
-    final = run_orchestrator_agent(discovery, strategy, visual, validator)
-    return build_agent_outputs(discovery, strategy, visual, validator, final)
+    outputs: dict[str, dict[str, Any]] = {}
+
+    for agent_id in get_executable_agent_ids():
+        agent = AGENT_DEFINITIONS[agent_id]
+        context = AgentContext(idea=idea, answers=answers, outputs=outputs)
+        outputs[agent_id] = agent.fallback_runner(context)
+
+    return build_agent_outputs(outputs)
 
 
-def build_agent_outputs(
-    discovery: dict[str, Any],
-    strategy: dict[str, Any],
-    visual: dict[str, Any],
-    validator: dict[str, Any],
-    final: dict[str, Any],
-) -> dict[str, Any]:
+def build_agent_outputs(outputs: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    final = run_orchestrator_agent(outputs)
     return {
-        "discovery": discovery,
-        "strategy": strategy,
-        "visual": visual,
-        "validator": validator,
+        "discovery": outputs["discovery"],
+        "strategy": outputs["strategy"],
+        "visual": outputs["visualIdentity"],
+        "validator": outputs["validator"],
         "final": final,
     }
 
 
-def run_discovery_agent(idea: str, answers: dict[str, str]) -> dict[str, Any]:
-    primary_audience = normalize_text(answers.get("Discovery")) or infer_audience(idea)
-    industry = infer_industry(idea)
+def discovery_llm_inputs(context: AgentContext) -> dict[str, Any]:
+    return {
+        "idea": context.idea,
+        "audience_choice": get_answer(context, "discovery", "Early adopters and growth-focused customers"),
+    }
+
+
+def strategy_llm_inputs(context: AgentContext) -> dict[str, Any]:
+    return {
+        "discovery_data": str(context.outputs["discovery"]),
+        "personality_choice": get_answer(context, "strategy", "Modern"),
+    }
+
+
+def visual_llm_inputs(context: AgentContext) -> dict[str, Any]:
+    return {
+        "idea": context.idea,
+        "discovery_data": str(context.outputs["discovery"]),
+        "strategy_data": str(context.outputs["strategy"]),
+        "design_style_choice": get_answer(context, "visualIdentity", "Modern"),
+    }
+
+
+def validator_llm_inputs(context: AgentContext) -> dict[str, Any]:
+    return {
+        "discovery_data": str(context.outputs["discovery"]),
+        "strategy_data": str(context.outputs["strategy"]),
+        "visual_data": str(context.outputs["visualIdentity"]),
+    }
+
+
+def build_discovery_question(context: AgentContext, agent: BrandAgent) -> str:
+    domain = infer_industry(context.idea).lower()
+    audience_sets = {
+        "health": ["hospitals", "clinics", "independent doctors", "patients"],
+        "food": ["college students", "working professionals", "families", "health-conscious locals"],
+        "education": ["beginners", "students", "career switchers", "training teams"],
+        "financial": ["first-time investors", "small businesses", "families", "finance teams"],
+        "hr": ["founders", "HR managers", "recruiters", "employees"],
+        "ai software": ["founders", "operators", "technical teams", "enterprise buyers"],
+    }
+    options = choose_contextual_options(domain, audience_sets, ["early adopters", "busy professionals", "small teams", "decision makers"])
+    subject = summarize_idea(context.idea).rstrip(".")
+    return normalize_question(f"For {subject}, which audience should the brand win first: {join_options(options)}?")
+
+
+def build_strategy_question(context: AgentContext, agent: BrandAgent) -> str:
+    audience = get_answer(context, "discovery", infer_audience(context.idea)).lower()
+    domain = infer_industry(context.idea).lower()
+    tone_sets = {
+        "health": ["reassuring", "clinical", "human", "innovative"],
+        "food": ["warm", "energetic", "fresh", "premium"],
+        "education": ["encouraging", "smart", "playful", "credible"],
+        "financial": ["secure", "clear", "premium", "modern"],
+        "hr": ["professional", "trustworthy", "innovative", "disruptive"],
+        "ai software": ["intelligent", "bold", "approachable", "enterprise-ready"],
+    }
+    options = choose_contextual_options(domain, tone_sets, ["trustworthy", "friendly", "innovative", "premium"])
+    return normalize_question(f"For {audience}, what personality should shape the brand voice: {join_options(options)}?")
+
+
+def build_visual_question(context: AgentContext, agent: BrandAgent) -> str:
+    audience = get_answer(context, "discovery", infer_audience(context.idea)).lower()
+    personality = get_answer(context, "strategy", "the chosen brand personality").lower()
+    domain = infer_industry(context.idea).lower()
+    style_sets = {
+        "health": ["clean and trustworthy", "calm and human", "modern clinical", "bold wellness"],
+        "food": ["fresh and colorful", "minimal and premium", "warm and local", "fast and energetic"],
+        "education": ["playful modern", "focused and clean", "bold gamified", "friendly academic"],
+        "financial": ["secure minimal", "premium editorial", "modern fintech", "calm professional"],
+        "hr": ["clean SaaS", "people-first", "enterprise-ready", "bold modern"],
+        "ai software": ["futuristic", "clean SaaS", "bold technical", "warm intelligent"],
+    }
+    options = choose_contextual_options(domain, style_sets, ["modern", "minimal", "futuristic", "premium"])
+    return normalize_question(f"Given a {personality} voice for {audience}, which visual direction fits best: {join_options(options)}?")
+
+
+def build_validator_question(context: AgentContext, agent: BrandAgent) -> str:
+    return ""
+
+
+def run_discovery_agent(context: AgentContext) -> dict[str, Any]:
+    primary_audience = get_answer(context, "discovery", infer_audience(context.idea))
+    industry = infer_industry(context.idea)
 
     return {
         "industry": industry,
@@ -184,21 +315,22 @@ def run_discovery_agent(idea: str, answers: dict[str, str]) -> dict[str, Any]:
             "secondary": infer_secondary_audience(primary_audience, industry),
         },
         "customerPainPoints": infer_pain_points(industry),
-        "mission": f"Help {primary_audience.lower()} solve {summarize_idea(idea).lower()} with a simple, trustworthy, and outcome-focused experience.",
+        "mission": f"Help {primary_audience.lower()} solve {summarize_idea(context.idea).lower()} with a simple, trustworthy, and outcome-focused experience.",
         "coreValues": ["Clarity", "Trust", "Momentum", "Customer empathy"],
-        "emotionalDrivers": infer_emotional_drivers(idea),
+        "emotionalDrivers": infer_emotional_drivers(context.idea),
         "businessGoals": [
             "Build a memorable brand identity",
             "Communicate value quickly",
             "Create trust at first touchpoint",
             "Support scalable customer acquisition",
         ],
-        "marketPosition": f"{summarize_idea(idea)} for {primary_audience}",
+        "marketPosition": f"{summarize_idea(context.idea)} for {primary_audience}",
     }
 
 
-def run_strategy_agent(discovery: dict[str, Any], answers: dict[str, str]) -> dict[str, Any]:
-    strategy_input = normalize_text(answers.get("Strategy")).lower()
+def run_strategy_agent(context: AgentContext) -> dict[str, Any]:
+    discovery = context.outputs["discovery"]
+    strategy_input = get_answer(context, "strategy", "").lower()
     personality = infer_personality(strategy_input, discovery)
 
     return {
@@ -218,16 +350,13 @@ def run_strategy_agent(discovery: dict[str, Any], answers: dict[str, str]) -> di
     }
 
 
-def run_visual_identity_agent(
-    idea: str,
-    discovery: dict[str, Any],
-    strategy: dict[str, Any],
-    answers: dict[str, str],
-) -> dict[str, Any]:
-    design_style = normalize_text(answers.get("Visual")) or infer_design_style(strategy)
+def run_visual_identity_agent(context: AgentContext) -> dict[str, Any]:
+    discovery = context.outputs["discovery"]
+    strategy = context.outputs["strategy"]
+    design_style = get_answer(context, "visualIdentity", infer_design_style(strategy))
     color_palette = build_color_palette(design_style, strategy)
     typography = build_typography(design_style)
-    brand_name = create_brand_name(idea, discovery, strategy)
+    brand_name = create_brand_name(context.idea, discovery, strategy)
     logo_concept = (
         f"A {design_style.lower()} identity mark that connects {discovery['industry'].lower()} "
         f"credibility with {strategy['brandPersonality'][0].lower()} energy for "
@@ -242,7 +371,7 @@ def run_visual_identity_agent(
         "logoConcept": logo_concept,
         "logoPrompt": create_logo_prompt(
             brand_name,
-            idea,
+            context.idea,
             discovery,
             strategy,
             design_style,
@@ -252,11 +381,10 @@ def run_visual_identity_agent(
     }
 
 
-def run_validator_agent(
-    discovery: dict[str, Any],
-    strategy: dict[str, Any],
-    visual: dict[str, Any],
-) -> dict[str, Any]:
+def run_validator_agent(context: AgentContext) -> dict[str, Any]:
+    discovery = context.outputs["discovery"]
+    strategy = context.outputs["strategy"]
+    visual = context.outputs["visualIdentity"]
     checks = [
         {"label": "Audience aligns with brand voice", "passed": len(strategy["brandVoice"]) >= 2},
         {"label": "Audience aligns with colors", "passed": 3 <= len(visual["colorPalette"]) <= 5},
@@ -282,12 +410,12 @@ def run_validator_agent(
     }
 
 
-def run_orchestrator_agent(
-    discovery: dict[str, Any],
-    strategy: dict[str, Any],
-    visual: dict[str, Any],
-    validator: dict[str, Any],
-) -> dict[str, Any]:
+def run_orchestrator_agent(outputs: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    discovery = outputs["discovery"]
+    strategy = outputs["strategy"]
+    visual = outputs["visualIdentity"]
+    validator = outputs["validator"]
+
     return {
         "brandName": visual["brandName"],
         "mission": discovery["mission"],
@@ -304,20 +432,46 @@ def run_orchestrator_agent(
     }
 
 
+def get_answer(context: AgentContext, agent_id: str, default: str) -> str:
+    return normalize_text(context.answers.get(agent_id)) or default
+
+
+def normalize_question(value: str) -> str:
+    question = " ".join(value.strip().strip('"\'').split())
+    if not question:
+        return ""
+    return question if question.endswith("?") else f"{question}?"
+
+
+def choose_contextual_options(domain: str, option_sets: dict[str, list[str]], fallback: list[str]) -> list[str]:
+    for keyword, options in option_sets.items():
+        if keyword in domain:
+            return options
+    return fallback
+
+
+def join_options(options: list[str]) -> str:
+    if len(options) < 2:
+        return ", ".join(options)
+    return f"{', '.join(options[:-1])}, or {options[-1]}"
+
+
 def normalize_text(value: Any) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
 def infer_industry(idea: str) -> str:
     text = idea.lower()
-    if has_any(text, ["fitness", "health", "wellness", "coach"]):
+    if has_any(text, ["fitness", "health", "wellness", "coach", "clinic", "doctor", "hospital"]):
         return "Health and wellness technology"
     if has_any(text, ["coding", "developer", "programming", "learn"]):
         return "Education technology"
-    if has_any(text, ["meal", "food", "restaurant", "delivery"]):
+    if has_any(text, ["meal", "food", "restaurant", "delivery", "grocery"]):
         return "Food and lifestyle"
-    if has_any(text, ["finance", "bank", "money", "invest"]):
+    if has_any(text, ["finance", "bank", "money", "invest", "payment"]):
         return "Financial technology"
+    if has_any(text, ["hr", "recruit", "employee", "payroll", "talent"]):
+        return "HR software"
     if has_any(text, ["ai", "automation", "platform", "saas"]):
         return "AI software"
     return "Startup technology"
@@ -528,3 +682,100 @@ def title_case(value: str) -> str:
     return value[0].upper() + value[1:].lower() if value else "Origin"
 
 
+AGENT_DEFINITIONS: dict[str, BrandAgent] = {
+    "discovery": BrandAgent(
+        id="discovery",
+        public_id="Discovery",
+        name="Discovery Agent",
+        role="Target Audience & Market Research",
+        objective="Identify the target audience, customer pain points, mission, and market position.",
+        expected_input="Startup idea and user response regarding target audience.",
+        output_schema={
+            "industry": "string",
+            "targetAudience": {"primary": "string", "secondary": "string"},
+            "customerPainPoints": "array of strings",
+            "mission": "string",
+            "coreValues": "array of strings",
+            "emotionalDrivers": "array of strings",
+            "businessGoals": "array of strings",
+            "marketPosition": "string",
+        },
+        llm_schema=DiscoveryOutput,
+        llm_system_prompt="You are the BrandForge Discovery Agent. Analyze audience and market context. Respond only as structured JSON matching the schema.",
+        llm_user_template="Startup Idea: {idea}\nTarget Audience Choice: {audience_choice}",
+        llm_input_builder=discovery_llm_inputs,
+        fallback_runner=run_discovery_agent,
+        question_builder=build_discovery_question,
+    ),
+    "strategy": BrandAgent(
+        id="strategy",
+        public_id="Strategy",
+        name="Strategy Agent",
+        role="Brand Voice & Positioning",
+        objective="Define personality, voice, archetype, positioning, value proposition, and tagline.",
+        expected_input="Discovery output and user response regarding brand personality.",
+        output_schema={
+            "brandPersonality": "array of strings",
+            "brandArchetype": "string",
+            "brandVoice": "array of strings",
+            "brandTone": "array of strings",
+            "positioningStatement": "string",
+            "valueProposition": "string",
+            "keyDifferentiators": "array of strings",
+            "tagline": "string",
+        },
+        llm_schema=StrategyOutput,
+        llm_system_prompt="You are the BrandForge Strategy Agent. Turn discovery insight into brand positioning and voice. Respond only as structured JSON matching the schema.",
+        llm_user_template="Discovery Data: {discovery_data}\nPersonality Choice: {personality_choice}",
+        llm_input_builder=strategy_llm_inputs,
+        fallback_runner=run_strategy_agent,
+        question_builder=build_strategy_question,
+    ),
+    "visualIdentity": BrandAgent(
+        id="visualIdentity",
+        public_id="Visual",
+        name="Visual Identity Agent",
+        role="Design Direction & Aesthetics",
+        objective="Generate brand name, visual direction, color palette, typography, and logo prompt.",
+        expected_input="Startup idea, discovery output, strategy output, and user design style preference.",
+        output_schema={
+            "brandName": "string",
+            "designStyle": "string",
+            "colorPalette": "array of objects containing hex and meaning",
+            "typography": "object containing headingFont and bodyFont",
+            "logoConcept": "string",
+            "logoPrompt": "string",
+        },
+        llm_schema=VisualOutput,
+        llm_system_prompt="You are the BrandForge Visual Identity Agent. Create a coherent visual system. Respond only as structured JSON matching the schema.",
+        llm_user_template="Startup Idea: {idea}\nDiscovery Data: {discovery_data}\nStrategy Data: {strategy_data}\nDesign Style: {design_style_choice}",
+        llm_input_builder=visual_llm_inputs,
+        fallback_runner=run_visual_identity_agent,
+        question_builder=build_visual_question,
+    ),
+    "validator": BrandAgent(
+        id="validator",
+        public_id="Validator",
+        name="Consistency Validator Agent",
+        role="Consistency & Alignment Check",
+        objective="Audit audience, strategy, visuals, and USP for cross-brand coherence.",
+        expected_input="Discovery, strategy, and visual identity outputs.",
+        output_schema={
+            "coherenceScore": "integer",
+            "status": "string",
+            "passedChecks": "array of strings",
+            "failedChecks": "array of strings",
+            "improvementSuggestions": "array of strings",
+            "finalSummary": "string",
+        },
+        llm_schema=ValidatorOutput,
+        llm_system_prompt="You are the BrandForge Consistency Validator Agent. Audit the complete brand system for coherence and USP clarity. Respond only as structured JSON matching the schema.",
+        llm_user_template="Discovery Data: {discovery_data}\nStrategy Data: {strategy_data}\nVisual Data: {visual_data}",
+        llm_input_builder=validator_llm_inputs,
+        fallback_runner=run_validator_agent,
+        question_builder=build_validator_question,
+        requires_user_input=False,
+    ),
+}
+
+agents = AGENT_DEFINITIONS

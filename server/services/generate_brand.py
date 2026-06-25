@@ -1,26 +1,17 @@
 import logging
 from typing import Any
 
-from agents import AGENTS, run_brand_pipeline
+from agents import (
+    generate_agent_question,
+    get_agent,
+    get_agent_registry as get_registered_agents,
+    get_workflow_agent_ids,
+    normalize_agent_key,
+    normalize_answer_map,
+    run_brand_pipeline,
+)
 
 logger = logging.getLogger(__name__)
-
-WORKFLOW_AGENTS = {
-    "Discovery": {
-        "key": "discovery",
-        "question": "Who is your primary target audience for this startup?",
-    },
-    "Strategy": {
-        "key": "strategy",
-        "question": "Should the brand personality feel premium, friendly, innovative, or playful?",
-    },
-    "Visual": {
-        "key": "visualIdentity",
-        "question": "Do you prefer a design style that is modern, futuristic, minimalist, or luxury?",
-    },
-}
-
-WORKFLOW_ORDER = ["Discovery", "Strategy", "Visual"]
 
 
 def generate_brand_workflow(
@@ -29,64 +20,61 @@ def generate_brand_workflow(
     current_agent: str = "",
 ) -> dict[str, Any]:
     normalized_idea = normalize_text(idea)
-    normalized_answers = normalize_answers(answers)
-    normalized_agent = normalize_text(current_agent)
+    normalized_answers = normalize_answer_map(answers)
+    current_agent_id = normalize_agent_key(current_agent)
 
-    logger.info("Brand workflow request received for agent '%s'.", normalized_agent or "start")
+    logger.info("Brand workflow request received for agent '%s'.", current_agent_id or "start")
 
     if not normalized_idea:
         return {"status": "error", "error": "Startup idea is required."}
 
-    if not normalized_agent:
-        return needs_input("Discovery")
+    workflow_agent_ids = get_workflow_agent_ids()
+    if not workflow_agent_ids:
+        return {"status": "error", "error": "No workflow agents are configured."}
 
-    if normalized_agent == "Discovery" and normalized_answers.get("Discovery"):
-        return needs_input("Strategy")
+    if not current_agent_id:
+        return needs_input(workflow_agent_ids[0], normalized_idea, normalized_answers)
 
-    if normalized_agent == "Strategy" and normalized_answers.get("Strategy"):
-        return needs_input("Visual")
+    if current_agent_id not in workflow_agent_ids:
+        logger.warning("Unknown workflow agent '%s'; restarting workflow.", current_agent_id)
+        return needs_input(workflow_agent_ids[0], normalized_idea, normalized_answers)
 
-    if normalized_agent == "Visual" and normalized_answers.get("Visual"):
-        agent_outputs = run_brand_pipeline(normalized_idea, normalized_answers)
-        return {
-            "status": "completed",
-            "agentOutputs": agent_outputs,
-            "brandData": build_client_brand_data(agent_outputs),
-        }
+    if not normalized_answers.get(current_agent_id):
+        return needs_input(current_agent_id, normalized_idea, normalized_answers)
 
-    return needs_input(normalized_agent if is_known_agent(normalized_agent) else "Discovery")
+    next_agent_id = get_next_agent_id(current_agent_id, workflow_agent_ids)
+    if next_agent_id:
+        return needs_input(next_agent_id, normalized_idea, normalized_answers)
+
+    agent_outputs = run_brand_pipeline(normalized_idea, normalized_answers)
+    return {
+        "status": "completed",
+        "agentOutputs": agent_outputs,
+        "brandData": build_client_brand_data(agent_outputs),
+    }
 
 
 def get_agent_registry() -> list[dict[str, Any]]:
-    return [
-        {
-            "key": key,
-            "id": agent["id"],
-            "name": agent["name"],
-            "role": agent["role"],
-            "objective": agent["objective"],
-            "input": agent["input"],
-            "outputSchema": agent["outputSchema"],
-        }
-        for key, agent in AGENTS.items()
-    ]
+    return get_registered_agents()
 
 
-def needs_input(agent_name: str) -> dict[str, Any]:
-    agent_config = WORKFLOW_AGENTS.get(agent_name, WORKFLOW_AGENTS["Discovery"])
-    prompt_agent = AGENTS[agent_config["key"]]
+def needs_input(agent_id: str, idea: str, answers: dict[str, str]) -> dict[str, Any]:
+    agent = get_agent(agent_id)
+    if agent is None:
+        raise ValueError(f"Unknown workflow agent: {agent_id}")
 
     return {
         "status": "needs_input",
-        "currentAgent": agent_name,
-        "question": agent_config["question"],
-        "agent": {
-            "id": prompt_agent["id"],
-            "name": prompt_agent["name"],
-            "role": prompt_agent["role"],
-            "objective": prompt_agent["objective"],
-        },
+        "currentAgent": agent.public_id,
+        "question": generate_agent_question(agent_id, idea, answers),
+        "agent": agent.prompt_summary(),
     }
+
+
+def get_next_agent_id(current_agent_id: str, workflow_agent_ids: list[str]) -> str | None:
+    current_index = workflow_agent_ids.index(current_agent_id)
+    next_index = current_index + 1
+    return workflow_agent_ids[next_index] if next_index < len(workflow_agent_ids) else None
 
 
 def build_client_brand_data(agent_outputs: dict[str, Any]) -> dict[str, Any]:
@@ -127,20 +115,5 @@ def build_client_brand_data(agent_outputs: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def normalize_answers(answers: dict[str, Any] | None) -> dict[str, str]:
-    if not isinstance(answers, dict):
-        return {}
-
-    return {
-        "Discovery": normalize_text(answers.get("Discovery")),
-        "Strategy": normalize_text(answers.get("Strategy")),
-        "Visual": normalize_text(answers.get("Visual")),
-    }
-
-
 def normalize_text(value: Any) -> str:
     return value.strip() if isinstance(value, str) else ""
-
-
-def is_known_agent(agent_name: str) -> bool:
-    return agent_name in WORKFLOW_AGENTS

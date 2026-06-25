@@ -210,9 +210,9 @@ Validator Agent Completes
 
 | Step | Agent | Focus | Sample Question |
 |------|-------|-------|-----------------|
-| 1 | **Discovery** | Target Audience & Market Research | "Who is your primary target audience?" |
-| 2 | **Strategy** | Brand Voice & Positioning | "What brand personality should this represent: premium, friendly, innovative, or playful?" |
-| 3 | **Visual** | Design Direction & Aesthetics | "What design style do you prefer: modern, futuristic, minimalist, or luxury?" |
+| 1 | **Discovery** | Target Audience & Market Research | Backend-generated, context-aware question |
+| 2 | **Strategy** | Brand Voice & Positioning | Backend-generated, context-aware question |
+| 3 | **Visual** | Design Direction & Aesthetics | Backend-generated, context-aware question |
 | 4 | **Validator** | Consistency & Alignment Check | Validates all inputs and ensures brand coherence |
 
 ---
@@ -437,7 +437,7 @@ Response (When needs_input):
 {
   status: "needs_input",
   currentAgent: "Strategy",
-  question: "What brand voice should this represent?"
+  question: "Backend-generated, context-aware question"
 }
 
 Response (When completed):
@@ -708,7 +708,7 @@ Messages are logged in `agentHistory` array:
   { role: "user", text: "AI-powered fitness coach..." },
   { role: "agent", agent: "Discovery", text: "Who is your target audience?" },
   { role: "user", text: "Corporate professionals..." },
-  { role: "agent", agent: "Strategy", text: "What brand voice..." },
+  { role: "agent", agent: "Strategy", text: "Backend-generated, context-aware question" },
   // ... more messages
 ]
 ```
@@ -834,19 +834,19 @@ for beginners aged 16-25"
 
 ### **Step 2: Answer Discovery Agent**
 ```
-Discovery Agent: "Who is your primary target audience?"
+Discovery Agent: Backend-generated, context-aware question
 You: "Teenagers and young adults interested in learning to code"
 ```
 
 ### **Step 3: Answer Strategy Agent**
 ```
-Strategy Agent: "What brand voice should represent this?"
+Strategy Agent: Backend-generated, context-aware question
 You: "Friendly, innovative, and encouraging"
 ```
 
 ### **Step 4: Answer Visual Agent**
 ```
-Visual Agent: "What design style do you prefer?"
+Visual Agent: Backend-generated, context-aware question
 You: "Modern and vibrant with playful elements"
 ```
 

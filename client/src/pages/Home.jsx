@@ -98,18 +98,10 @@ export default function Home() {
     setBrandData(selectedBrand);
     setCurrentAgent("completed");
     setQuestion("");
-    // Reconstruct history logs
-    const history = [
+    setAgentHistory([
       { role: "user", text: selectedBrand.idea },
-      { role: "agent", agent: "Discovery", text: "Discovery Agent: Who is your primary target audience?" },
-      { role: "user", text: selectedBrand.audience },
-      { role: "agent", agent: "Strategy", text: "Strategy Agent: Should the brand personality feel premium, friendly, innovative, or playful?" },
-      { role: "user", text: Array.isArray(selectedBrand.voice) ? selectedBrand.voice[0] : selectedBrand.voice?.split(",")[0] },
-      { role: "agent", agent: "Visual", text: "Visual Agent: Do you prefer a design style that is modern, futuristic, minimalist, or luxury?" },
-      { role: "user", text: selectedBrand.logoPrompt?.includes("luxury") ? "luxury" : "modern" },
-      { role: "agent", agent: "Validator", text: "Validator reviewing brand consistency... Completed." }
-    ];
-    setAgentHistory(history);
+      { role: "agent", agent: "Validator", text: "Saved brand report loaded from history." }
+    ]);
   };
 
   // Phase 1: Submit Startup Idea
